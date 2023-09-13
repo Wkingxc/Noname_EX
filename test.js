@@ -115,8 +115,6 @@ game.import("extension",function(lib,game,ui,get,ai,_status){return {name:"Test"
                     },
                 },
             },
-
-
             /**博识：摸牌阶段开始时，你可以跳过并进行判定：若结果与此阶段内以此法进行判定的结果的点数均不同,
              * 你可以重复此流程,然后你摸所有判定生效牌数一半的牌(向下取整),若此时你手牌全场最多,你失去一点体力。*/
             xboshi: {},
