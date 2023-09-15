@@ -13,13 +13,15 @@ package: {
             xzhangjiao: ["male", "shen", 4, ["xguidao", "xyizhao", "xtianshu", "xleiji"], []],
             xniuyeye: ["male", "qun", 3, ["xfandou", "xhuayuan", "xguahu"], ["des:翻斗花园第一男神"]],
             xmachao: ["male", "shen", 4, ["mashu", "xtieji", "xshenwei"], []],
-            xzhipeilvzhe:["none", "jin", 3, ["xzhipei","xqianren"]],
+            xzhipeilvzhe: ["none", "jin", 3, ["xzhipei", "xqianren"]],
+            xxiao:["male", "shen", 3, ["xchaoli", "xboshi", "xxiuse", "xwulai"], []],
         },
         translate: {
             xzhangjiao: "张角",
             xniuyeye: "牛爷爷",
             xmachao: "神马超",
             xzhipeilvzhe: "支配之律者",
+            xxiao: "肖吊毛",
         },
     },
     
@@ -502,6 +504,195 @@ package: {
                     player.removeSkill('xxinbiao');
                 }
             },
+
+
+
+            /*钞力：锁定技,你使用或打出一张牌后,获得等于此牌点数的“钞”标记。
+            出牌阶段限X次, 你可以移去20张“钞”, 视为使用一种任意基本牌或者普通锦囊牌(X为3-体力上限)。*/
+            xchaoli: {
+                audio:1,
+                enable:"phaseUse",
+                filter: function (event, player) {
+                    var num = 3-player.maxHp;
+                    return (player.getStat("skill").xchaoli||0) < num && player.countMark('xchaoli_chao') >= 20;
+                },
+                chooseButton:{
+                    dialog:function(event,player){
+                        var list=[];
+                        for(var i=0;i<lib.inpile.length;i++){
+                            var name=lib.inpile[i];
+                            if(name=='sha'){
+                                list.push(['基本','','sha']);
+                                for(var j of lib.inpile_nature) list.push(['基本','','sha',j]);
+                            }
+                            else if(get.type(name)=='trick') list.push(['锦囊','',name]);
+                            else if(get.type(name)=='basic') list.push(['基本','',name]);
+                        }
+                        return ui.create.dialog('钞力',[list,'vcard']);
+                    },
+                    filter:function(button,player){
+                        return _status.event.getParent().filterCard({name:button.link[2]},player,_status.event.getParent());
+                    },
+                    backup:function(links,player){
+                        return {
+                            filterCard:true,
+                            audio:'scstaoluan',
+                            selectCard:0,
+                            viewAs: { name: links[0][2], nature: links[0][3]},
+                            onuse: function (result, player) {
+                                player.removeMark('xchaoli_chao', 20);
+                            }
+                        }
+                    },
+                    
+                },
+                group: "xchaoli_chao",
+                subSkill: {
+                    chao: {
+                        sub: true,
+                        parent: "xchaoli",
+                        forced: true,
+                        trigger: {
+                            player: ["useCard", "respond"],
+                        },
+                        filter: function (event, player) {
+                            return typeof get.number(event.card) == 'number';
+                        },
+                        marktext: "钞",
+                        intro: {
+                            content: "mark",
+                        },
+                        content: function () {
+                            player.addMark('xchaoli_chao', get.number(trigger.card));
+                        },
+                    },
+                },
+            },
+            /**博识：摸牌阶段,你可以改为展示牌堆顶的一张牌：若结果与此阶段内以此法展示的结果的点数均不同,
+             * 你可以重复此流程,然后你获取一半的展示牌(向上取整),其余牌置于牌堆底,若此时你的手牌全场最多,你失去一点体力。*/
+            xboshi: {
+                audio:'shuishi',
+                trigger:{
+                    player:"phaseDrawBegin1",
+                },
+                filter:function(event,player){
+                    return !event.numFixed;
+                },
+                content: function () {
+                    'step 0'
+                    trigger.changeToZero();
+                    event.numbers = [];
+                    event.cards = [];
+                    'step 1'
+                    var card = get.cards()[0];
+                    game.cardsGotoOrdering(card);
+                    event.cards.push(card);
+                    var card_num = get.number(card);
+                    player.showCards(card,);
+                    game.delay(2);
+                    if (!event.numbers.contains(card_num)) {
+                        event.numbers.push(card_num);
+                        event.goto(1);
+                    }
+                    'step 2'
+                    game.delay(1);
+                    var num = Math.floor(event.cards.length / 2);
+                    var num2 = Math.ceil(event.cards.length / 2);
+                    var next = player.chooseToMove('获得' + get.cnNumber(num2) + '张牌并将其余牌置于牌堆底', true);
+                    next.set('list', [
+                        ['牌堆顶的展示牌'],
+                        ['牌堆底',cards],
+                    ]);
+                    next.set('filterMove', function (from, to, moved) {
+                        if (moved[0].contains(from) && to == 1) return moved[1].length < _status.event.num;
+                        return true;
+                    });
+                    next.set('filterOk', function (moved) {
+                        return moved[1].length == _status.event.num;
+                    });
+                    next.set('num', num);
+                    'step 3'
+                    if (result.bool) {
+                        var list = result.moved;
+                        if (list[0].length) player.gain(list[0], 'gain2');
+                        while (list[1].length) ui.cardPile.appendChild(list[1].shift().fix());
+                    }
+                }
+            },
+            //秀色：你对女性角色造成伤害时,你可以获得其一张牌;当女性角色对你造成伤害时,你随机弃置一张手牌或装备牌。
+            xxiuse: {
+                group: ['xxiuse_1', 'xxiuse_2'],
+                subSkill: {
+                    1: {
+                        audio:'roulin',
+                        sub: true,
+                        parent: "xxiuse",
+                        trigger: {
+                            source: "damageBegin",
+                        },
+                        filter: function (event, player) {
+                            return event.player.hasSex('female');
+                        },
+                        content: function () {
+                            player.gainPlayerCard(trigger.player, true, 'he');
+                        }
+                    },
+                    2: {
+                        audio:'roulin',
+                        sub: true,
+                        parent: "xxiuse",
+                        frequent: true,
+                        trigger: {
+                            player: "damageBegin",
+                        },
+                        filter: function (event, player) {
+                            return event.source.hasSex('female');
+                        },
+                        content: function () {
+                            card = player.get('he').randomGet();
+                            if (card) {
+                                player.discard(card);
+                            }
+                        },
+                    },
+                }
+                
+            },
+            /*无赖：锁定技,当你处于濒死状态时,若体力上限大于1:
+            你减少一点体力上限, 并回复一点体力;若此时体力上限为1, 你进入免伤状态持续到回合开始。*/
+            xwulai: {
+                forced: true,
+                frequent: true,
+                trigger: {
+                    player: "dyingBegin",
+                },
+                filter: function (event, player) {
+                    return player.maxHp > 1;
+                },
+                content: function () {
+                    'step 0'
+                    player.loseMaxHp();
+                    player.revive();
+                    'step 1'
+                    if (player.maxHp == 1) {
+                        player.addTempSkill('xwulai_1', 'phaseBegin');
+                    }
+                },
+                subSkill: {
+                    1: {
+                        sub: true,
+                        parent: "xwulai",
+                        forced: true,
+                        trigger: {
+                            player: "damageBegin",
+                        },
+                        content: function () {
+                            trigger.cancel();
+                        },
+                    },
+                }
+            },
+
         },
         translate: {
             xguidao: "鬼道",
@@ -531,6 +722,15 @@ package: {
             "xjuchang_info": "锁定技,拥有“支”标记的角色对你造成伤害后,你获得其一个技能直到你下个回合结束。每轮开始时,该轮你额外执行X个回合,你的手牌上限+X(X为全场“支”的数量)。",
             xxinbiao: "信标",
             "xxinbiao_info": "锁定技,当你进入濒死状态时,你移除一枚“支”标记。",
+            xchaoli: "钞力",
+            "xchaoli_info": "锁定技,当你使用或打出一张牌后,获得等于此牌点数的“钞”标记。出牌阶段限X次, 你可以移去20张“钞”, 视为使用一种任意基本牌或者普通锦囊牌(X为3-体力上限)。",
+            xboshi: "博识",
+            "xboshi_info": "摸牌阶段,你可以改为展示牌堆顶的一张牌：若结果与此阶段内以此法展示的结果的点数均不同,你可以重复此流程,然后你获取一半的展示牌(向上取整),其余牌置于牌堆底,若此时你的手牌全场最多,你失去一点体力。",
+            xxiuse: "秀色",
+            "xxiuse_info": "你对女性角色造成伤害时,你可以获得其一张牌;当女性角色对你造成伤害时,你随机弃置一张手牌或装备牌。",
+            xwulai: "无赖",
+            "xwulai_info": "锁定技,当你处于濒死状态时,若体力上限大于1:你减少一点体力上限, 并回复一点体力;若此时体力上限为1, 你进入免伤状态持续到回合开始。",
+
         },
     },
     intro: "",
@@ -539,4 +739,4 @@ package: {
     forumURL: "",
     version: "1.0",
 },
-files: { "character": ["xniuyeye.jpg", "xzhangjiao.jpg", "xmachao.jpg", "xzhipeilvzhe.jpg"], "card": [], "skill": [] },}})
+files: { "character": ["xniuyeye.jpg", "xzhangjiao.jpg", "xmachao.jpg", "xzhipeilvzhe.jpg",'xxiao.jpg'], "card": [], "skill": [] },}})
