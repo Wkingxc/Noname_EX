@@ -2,11 +2,31 @@ game.import("extension", function (lib, game, ui, get, ai, _status) {
 return {name: "传奇武将",content: function (config, pack) { },precontent: function () { }, help: {}, config: {},
 package: {
     card: {
-        card: {
+        card:{
+            htchui:{
+                fullskin: true,
+                type: 'equip',
+                subtype: 'equip1',
+                skills: ['htchui_skill'],
+                enable: true,
+                filterTarget:function(card,player,target){
+                    if(player!=target) return false;
+                    return target.canEquip(card,true);
+                },
+                modTarget:true,
+                allowMultiple:false,
+                content:function(){
+                    if(cards.length&&get.position(cards[0],true)=='o') target.equip(cards[0]);
+                },
+                toself:true,
+                
+            },
         },
-        translate: {
+        translate:{
+            htchui:"昊天锤",
+            "htchui_info":"123231321",
         },
-        list: [],
+        list:[["spade","9","昊天锤"]],
     },
     character: {
         character: {
@@ -14,7 +34,9 @@ package: {
             xniuyeye: ["male", "qun", 3, ["xfandou", "xhuayuan", "xguahu"], ["des:翻斗花园第一男神"]],
             xmachao: ["male", "shen", 4, ["mashu", "xtieji", "xshenwei"], []],
             xzhipeilvzhe: ["none", "jin", 3, ["xzhipei", "xqianren"]],
-            xxiao:["male", "shen", 3, ["xchaoli", "xboshi", "xxiuse", "xwulai"], []],
+            xxiao: ["male", "shen", 3, ["xchaoli", "xboshi", "xxiuse", "xwulai"], []],
+            xguaxian: ['male', 'qun', 3, ['xbugua', 'xnigua'], []],
+            xysqh:['male','wei',15,[],[]],
         },
         translate: {
             xzhangjiao: "张角",
@@ -22,11 +44,222 @@ package: {
             xmachao: "神马超",
             xzhipeilvzhe: "支配之律者",
             xxiao: "肖吊毛",
+            xguaxian: "卦仙",
+            xysqh:"一帅千欢",
         },
     },
     
     skill: {
         skill: {
+            //此处写装备牌的技能
+            htchui_skill: {
+                equipSkill: true,
+                enable: 'phaseUse',
+                shaRelated: true,
+                frequent: true,
+                trigger: { player: "useCardToPlayered", },
+                filter: function (event, player) { return event.card.name == 'sha'; },
+                content: function () {
+                    player.draw(3);
+                }
+            },
+
+
+
+
+
+
+            //非酋：锁定技,每名玩家出牌阶段开始时,你进行判定：若点数不为“648”,则你失去一点体力,获得一枚“非”标记。
+            xfeiqiu: {},
+            //肝帝：出牌阶段限一次,你可以主动触发【非酋】的效果并摸一张牌。此回合你每造成一点伤害或每使用三张牌,此技可发动次数+1。
+            xgandi: {},
+            /**
+             * 十连：出牌阶段限一次，你可以移除4枚“非”进行判定从牌堆和弃牌区获得对应数量的基本/装备/锦囊牌。
+             * ♥2~9,视为【欧】,否则视为【歪】;若点数与体力值相同,视为【皇】。
+             *（①欧,1/2/3,失去4点体力上限；②歪,1/1/1,获得【保】;③皇,5/5/5,失去7点体力上限；
+             * ④【保】,增加2点体力上限并回复两点体力,下次十连视为【欧】）体力上限至少为2。
+             */
+            xshilian: {},
+            //大胃：你使用【桃】、【酒】时，效果结算两次。
+            xdawei: {},
+            
+
+
+
+
+
+
+            //卜卦:转换技，阳：当你使用锦囊牌时。阴：当你使用或打出非锦囊牌时。你可以进行判定：
+            //♥，回复一点体力（若满则摸一张牌）；♦，令一名角色失去一点体力（限一次）；♣，摸一张牌；♠，弃置一名其他角色的一张牌。
+            xbugua: {
+                zhuanhuanji: true,
+                mark: true,
+                intro:{
+                    content:function(storage,player,skill){
+                        if(player.storage.xbugua==true) return '当你使用或打出非锦囊牌时。';
+                        return '当你使用锦囊牌时。';
+                    },
+                },
+                group: ["xbugua_yang", "xbugua_yin",'xbugua_diamond'],
+                subSkill: {
+                    yang: {
+                        audio: 'th_tianshu',
+                        trigger: { player: "useCard", },
+                        filter: function (event, player) {
+                            return get.type2(event.card) == 'trick' && player.storage.xbugua != true && player.storage.diamond <= 1;
+                        },
+                        content: function () {
+                            player.changeZhuanhuanji('xbugua');
+                            event.insert(lib.skill.xbugua.panding,{player:player});
+                        },
+                        sub: true,
+                        parentskill: "xbugua",
+                    },
+                    yin: {
+                        audio: 'th_tianshu',
+                        trigger: {player:['useCard','respond'],},
+                        filter: function (event, player) {
+                            return get.type2(event.card) != 'trick' && player.storage.xbugua == true && player.storage.diamond <= 1;
+                        },
+                        content: function () { 
+                            player.changeZhuanhuanji('xbugua');
+                            event.insert(lib.skill.xbugua.panding,{player:player});
+                        },
+                        sub: true,
+                        parentskill: "xbugua",
+                    },
+                    diamond: { 
+                        sub: true,
+                        parentskill: "xbugua",
+                        trigger: { player: "phaseBegin", },
+                        frequent: true,
+                        forced: true,
+                        content: function () {
+                            player.storage.diamond = 1;
+                        }
+                    },
+                },
+                "panding": function () {
+                    "step 0"
+                    player.judge(function () { return 0 });
+                    "step 1"
+                    var suit = result.suit;
+                    if (suit == 'heart') {
+                        if (player.hp < player.maxHp) player.recover();
+                        else player.draw();
+                        event.finish();
+                    }
+                    else if (suit == 'diamond') {
+                        event.goto(2);
+                    }
+                    else if (suit == 'club') {
+                        player.draw();
+                        event.finish();
+                    }
+                    else if (suit == 'spade') {
+                        event.goto(4);
+                    }
+                    'step 2'
+                    player.chooseTarget('请选择一名角色失去一点体力',function(card,player,target){
+                        return player!=target;
+                    })
+                    'step 3'
+                    if (result.bool) {
+                        if (player.storage.diamond >= 1) {
+                            player.storage.diamond--;
+                            result.targets[0].loseHp();
+                            event.finish();
+                        }
+                        event.finish();
+                    }
+                    'step 4'
+                    player.chooseTarget('请弃置一名角色的一张牌',function(card,player,target){
+                        return player!=target;
+                    })
+                    'step 5'
+                    if (result.bool) {
+                        player.discardPlayerCard(result.targets[0], true, 'he');
+                    }
+                }
+                
+            },
+            //限定技，出牌阶段，你可以令某种花色视为另一种花色，同时获得阴阳技（强制进行判定）并解除♦生效的次数上限直至回合结束。
+            xnigua: {
+                audio:"th_yufeng",
+                enable:"phaseUse",
+                limited:true,
+                skillAnimation:true,
+                animationColor: "orange",
+                content: function () {
+                    'step 0'
+                    player.awakenSkill('xnigua');
+                    player.draw(2);
+                    player.storage.diamond = 100;
+                    player.addTempSkill('xnigua_yy');
+                    'step 1'
+                    player.chooseControl(['♥️️', '♦️️', '♠️️', '♣️️']).set('prompt', '请选择要改变的花色:');
+                    'step 2'
+                    switch (result.control) {
+                        case '♥️️': _status.event.player.storage.a = 'heart'; break;
+                        case '♦️️': _status.event.player.storage.a = 'diamond'; break;
+                        case '♠️️': _status.event.player.storage.a = 'spade'; break;
+                        case '♣️️': _status.event.player.storage.a = 'club'; break;
+                    }
+                    'step 3'
+                    player.chooseControl(['♥️️', '♦️️', '♠️️', '♣️️']).set('prompt', '请选择改变后的花色:');
+                    'step 4'
+                    switch (result.control) {
+                        case '♥️️': _status.event.player.storage.b = 'heart'; break;
+                        case '♦️️': _status.event.player.storage.b = 'diamond'; break;
+                        case '♠️️': _status.event.player.storage.b = 'spade'; break;
+                        case '♣️️': _status.event.player.storage.b = 'club'; break;
+                    }
+                    player.addTempSkill('xnigua_huase');
+                },
+                subSkill: {
+                    yy: {
+                        sub: true,
+                        parentskill: "xnigua",
+                        audio: 'th_tianshu',
+                        frequent: true,
+                        trigger: { player: "useCard", },
+                        content: function () {
+                            event.insert(lib.skill.xbugua.panding,{player:player});
+                        }
+                    },
+                    huase: {
+                        sub: true,
+                        parentskill: "xbugua",
+                        forced: true,
+                        mark: true,
+                        intro:{
+                            content: function (storage, player, skill) {
+                                var a = '';
+                                var b = '';
+                                switch (_status.event.player.storage.a) {
+                                    case 'heart': a = '♥️️'; break;
+                                    case 'diamond': a = '♦️️'; break;
+                                    case 'spade': a = '♠️️'; break;
+                                    case 'club': a = '♣️️'; break;
+                                }
+                                switch (_status.event.player.storage.b) {
+                                    case 'heart': b = '♥️️'; break;
+                                    case 'diamond': b = '♦️️'; break;
+                                    case 'spade': b = '♠️️'; break;
+                                    case 'club': b = '♣️️'; break;
+                                }
+                                return '将' + a + '视为' + b;
+                            },
+                        },
+                        mod: {
+                            suit: function (card, suit) {
+                                if(suit==_status.event.player.storage.a) return _status.event.player.storage.b;
+                            }
+                        },
+                    },
+                },
+            },
+
             //异兆
             xyizhao: {
                 audio: "yizhao",
@@ -675,7 +908,7 @@ package: {
                     player.revive();
                     'step 1'
                     if (player.maxHp == 1) {
-                        player.addTempSkill('xwulai_1', 'phaseBegin');
+                        player.addTempSkill('xwulai_1', {player:'phaseBegin'});
                     }
                 },
                 subSkill: {
@@ -683,6 +916,9 @@ package: {
                         sub: true,
                         parent: "xwulai",
                         forced: true,
+                        mark: true,
+                        marktext: "免伤",
+                        intro:{},
                         trigger: {
                             player: "damageBegin",
                         },
@@ -695,6 +931,18 @@ package: {
 
         },
         translate: {
+            xfeiqiu: "非酋",
+            "xfeiqiu_info": "锁定技,每名玩家出牌阶段开始时,你进行判定：若点数不为“648”,则你失去一点体力,获得一枚“非”标记。",
+            xgandi: "肝帝",
+            "xgandi_info": "出牌阶段限一次,你可以主动触发【非酋】的效果并摸一张牌。此回合你每造成一点伤害或每使用三张牌,此技可发动次数+1。",
+            xshilian: "十连",
+            "xshilian_info": "出牌阶段限一次，你可以移除4枚“非”进行判定从牌堆和弃牌区获得对应数量的基本/装备/锦囊牌。♥2~9,视为【欧】,否则视为【歪】;若点数与体力值相同,视为【皇】。（①欧,1/2/3,失去4点体力上限；②歪,1/1/1,获得【保】;③皇,5/5/5,失去7点体力上限；④【保】,增加2点体力上限并回复两点体力,下次十连视为【欧】）体力上限至少为2。",
+            xdawei: "大胃",
+            "xdawei_info": "你使用【桃】、【酒】时，效果结算两次。",
+            xbugua: "卜卦",
+            "xbugua_info": "转换技，阳：当你使用锦囊牌时。阴：当你使用或打出非锦囊牌时。你可以进行判定：♥，回复一点体力（若满则摸一张牌）；♦，令一名角色失去一点体力（限一次）；♣，摸一张牌；♠，弃置一名其他角色的一张牌。",
+            xnigua: "逆卦",
+            "xnigua_info": "限定技，出牌阶段，你可以令某种花色视为另一种花色，同时获得阴阳技（强制进行判定）并解除♦生效的次数上限直至回合结束。",
             xguidao: "鬼道",
             "xguidao_info": "当一名角色的判定牌生效前,你可以打出一张牌替换之",
             xyizhao: "异兆",
@@ -739,4 +987,11 @@ package: {
     forumURL: "",
     version: "1.0",
 },
-files: { "character": ["xniuyeye.jpg", "xzhangjiao.jpg", "xmachao.jpg", "xzhipeilvzhe.jpg",'xxiao.jpg'], "card": [], "skill": [] },}})
+    files: {
+        "character": ["xniuyeye.jpg", "xzhangjiao.jpg", "xmachao.jpg", "xzhipeilvzhe.jpg", 'xxiao.jpg', 'xguaxian.jpg'
+        'xysqh.jpg'],
+        "card": ["htchui.jpg"],
+        "skill": []
+    },
+}
+})
