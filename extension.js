@@ -30,13 +30,14 @@ package: {
     },
     character: {
         character: {
-            xzhangjiao: ["male", "shen", 4, ["xguidao", "xyizhao", "xtianshu", "xleiji"], []],
-            xniuyeye: ["male", "qun", 3, ["xfandou", "xhuayuan", "xguahu"], ["des:翻斗花园第一男神"]],
-            xmachao: ["male", "shen", 4, ["mashu", "xtieji", "xshenwei"], []],
-            xzhipeilvzhe: ["none", "jin", 3, ["xzhipei", "xqianren"]],
-            xxiao: ["male", "shen", 3, ["xchaoli", "xboshi", "xxiuse", "xwulai"], []],
-            xguaxian: ['male', 'qun', 3, ['xbugua', 'xnigua'], []],
-            xysqh:['male','wei',15,[],[]],
+            xzhangjiao: ["male", "shen", 4, ["xguidao", "xyizhao", "xtianshu", "xleiji"], ['ext:传奇武将/img/xzhangjiao.jpg']],
+            xniuyeye: ["male", "qun", 3, ["xfandou", "xhuayuan", "xguahu"], ["des:翻斗花园第一男神", 'ext:传奇武将/img/xniuyeye.jpg']],
+            xmachao: ["male", "shen", 4, ["mashu", "xtieji", "xshenwei"], ['ext:传奇武将/img/xmachao.jpg']],
+            xzhipeilvzhe: ["none", "jin", 3, ["xzhipei", "xqianren"],['ext:传奇武将/img/xzhipeilvzhe.jpg']],
+            xxiao: ["male", "shen", 3, ["xchaoli", "xboshi", "xxiuse", "xwulai"], ['ext:传奇武将/img/xxiao.jpg']],
+            xguaxian: ['male', 'qun', 3, ['xbugua', 'xnigua'], ['ext:传奇武将/img/xguaxian.jpg']],
+            xysqh: ['male', 'wei', 12, ['xfeiqiu', 'xgandi', 'xshilian', 'xdawei', 'xtest'], ['ext:传奇武将/img/xysqh.jpg']],
+            xmabaoguo:['male','jin',4,[],[]],
         },
         translate: {
             xzhangjiao: "张角",
@@ -45,7 +46,8 @@ package: {
             xzhipeilvzhe: "支配之律者",
             xxiao: "肖吊毛",
             xguaxian: "卦仙",
-            xysqh:"一帅千欢",
+            xysqh: "一帅千欢",
+            xmabaoguo:"马保国",
         },
     },
     
@@ -69,19 +71,265 @@ package: {
 
 
 
-            //非酋：锁定技,每名玩家出牌阶段开始时,你进行判定：若点数不为“648”,则你失去一点体力,获得一枚“非”标记。
-            xfeiqiu: {},
+            //非酋：锁定技,每名玩家出牌阶段开始时,若你体力大于1则你进行判定：若点数不为“648”,则你失去一点体力,获得一枚“非”标记。
+            xfeiqiu: {
+                forced: true,
+                frequent: true,
+                mark: true,
+                marktext: '非',
+                intro: { name: "非", content: "你是非酋！", },
+                trigger: { global: "phaseUseBegin", },
+                filter: function (event, player) {
+                    return player.hp > 1;
+                },
+                content: function () {
+                    'step 0'
+                    player.judge(function () { return 0 });
+                    'step 1'
+                    //如果点数不为4,6,8，则失去一点体力，获得一枚“非”标记
+                    if (result.number != 4 && result.number != 6 && result.number != 8) {
+                        player.loseHp();
+                        player.addMark('xfeiqiu', 1);
+                    }
+                }
+            },
             //肝帝：出牌阶段限一次,你可以主动触发【非酋】的效果并摸一张牌。此回合你每造成一点伤害或每使用三张牌,此技可发动次数+1。
-            xgandi: {},
+            xgandi: {
+                enable:"phaseUse",
+                filter: function (event, player) {
+                    return player.storage.xgandi >= 1;
+                },
+                group: ["xgandi_1",'xgandi_usecard','xgandi_damage'],
+                content: function () { 
+                    'step 0'
+                    player.draw();
+                    player.storage.xgandi--;
+                    player.judge(function () { return 0 });
+                    'step 1'
+                    //如果点数不为4,6,8，则失去一点体力，获得一枚“非”标记
+                    if (result.number != 4 && result.number != 6 && result.number != 8) {
+                        player.loseHp();
+                        player.addMark('xfeiqiu', 1);
+                    }
+                },
+                subSkill: {
+                    1: {
+                        forced: true,
+                        frequent: true,
+                        trigger:{player:'phaseBegin',},
+                        content: function () {
+                            player.storage.xgandi = 1;
+                        }
+                    },
+                    damage: {
+                        frequent: true,
+                        forced: true,
+                        trigger:{source:"damageSource",},
+                        content: function () {
+                            player.storage.xgandi++;
+                        }
+                    },
+                    usecard: {
+                        frequent: true,
+                        trigger: { player: "useCard", },
+                        filter:function(event,player){
+                            var evt=event.getParent('phaseUse');
+                            if(!evt||evt.player!=player) return false;
+                            var num=player.getHistory('useCard',evtx=>evtx.getParent('phaseUse')==evt).length;
+                            return num%3==0;
+                        },
+                        content: function () { 
+                            player.storage.xgandi++;
+                        }
+                    },
+                }
+            },
             /**
-             * 十连：出牌阶段限一次，你可以移除4枚“非”进行判定从牌堆和弃牌区获得对应数量的基本/装备/锦囊牌。
+             * 十连：出牌阶段限一次，你可以移除5枚“非”进行判定从牌堆或弃牌区随机获得对应数量的基本/装备/锦囊牌。
              * ♥2~9,视为【欧】,否则视为【歪】;若点数与体力值相同,视为【皇】。
-             *（①欧,1/2/3,失去4点体力上限；②歪,1/1/1,获得【保】;③皇,5/5/5,失去7点体力上限；
-             * ④【保】,增加2点体力上限并回复两点体力,下次十连视为【欧】）体力上限至少为2。
+             *（①歪,1/1/1,获得【保】;②欧,1/2/3,失去5点体力上限;③皇,3/5/5,失去7点体力上限；
+             * ④【保】,增加2点体力上限并回复两点体力,下次十连视为【欧】）你的体力上限至少为2。
              */
-            xshilian: {},
+            xtest: {
+                enable: "phaseUse",
+                usable: 1,
+                content: function () { 
+                    player.addMark('xfeiqiu', 20);
+                }
+            },
+            xshilian: {
+                enable: "phaseUse",
+                usable: 1,
+                filter: function (event, player) {
+                    return player.countMark('xfeiqiu') >= 5;
+                },
+                content: function () { 
+                    'step 0'
+                    player.removeMark('xfeiqiu', 5);
+                    if (player.hasSkill('xshilian_bao')) {
+                        event.insert(lib.skill.xshilian.ou,{player:player});
+                        player.removeSkill('xshilian_bao');
+                        event.finish();
+                    }
+                    'step 1'
+                    player.judge(function () { return 0 });
+                    'step 2'
+                    if(result.number>=2&&result.number<=9&&result.suit=='heart'){
+                        event.insert(lib.skill.xshilian.ou,{player:player});
+                    } else {
+                        event.insert(lib.skill.xshilian.wai,{player:player});
+                    }
+                    if(result.number==player.hp){
+                        event.insert(lib.skill.xshilian.huang,{player:player});
+                    }
+                    
+                },
+                subSkill: {
+                    bao: {
+                        sub: true,
+                        parentskill: "xshilian",
+                        mark: true,
+                        marktext: '【保】',
+                        intro: { name: "【保】", content: "保底附体：下次十连一定欧！" },
+                        init:function(player){
+                            player.gainMaxHp(2);
+                            player.recover(2);
+                        },
+                    }
+                },
+                //1/1/1,获得【保】
+                "wai": function () {
+                    var cards = [];
+                    var card = get.cardPile2(function (card) {
+                        return get.type2(card) == 'basic';
+                    });
+                    cards.push(card);
+                    card = get.cardPile2(function (card) {
+                        return get.type2(card) == 'equip';
+                    });
+                    cards.push(card);
+                    card = get.cardPile2(function (card) {
+                        return get.type2(card) == 'trick';
+                    });
+                    cards.push(card);
+                    player.directgain(cards);
+                    player.addSkill('xshilian_bao');
+                },
+                //1/2/3,失去5点体力上限
+                "ou": function () { 
+                    var cards = [];
+                    var card = get.cardPile2(function (card) {
+                        return get.type2(card) == 'basic';
+                    });
+                    cards.push(card);
+                    for (var i = 0; i < 2; i++) {
+                        card = get.cardPile2(function (card) {
+                            return get.type2(card) == 'equip';
+                        });
+                        if (card) {
+                            ui.special.appendChild(card);
+                            cards.push(card);
+                        }
+                    }
+                    for (var i = 0; i < 3; i++) {
+                        card = get.cardPile2(function (card) {
+                            return get.type2(card) == 'trick';
+                        });
+                        if (card) {
+                            ui.special.appendChild(card);
+                            cards.push(card);
+                        }
+                    }
+                    player.directgain(cards);
+                    if (player.maxHp >= 7) {
+                        player.loseMaxHp(5);
+                    } else {
+                        player.loseHp(player.maxHp - 2);
+                    }
+                },
+                //3/4/5,失去7点体力上限
+                "huang": function () { 
+                    var cards = [];
+                    var b_num = 3;
+                    var e_num = 4;
+                    var t_num = 5;
+                    while (b_num) {
+                        var card = get.cardPile2(function (card) {
+                            return get.type2(card) == 'basic';
+                        });
+                        if (card) {
+                            b_num--;
+                            ui.special.appendChild(card);
+                            cards.push(card);
+                        }
+                    }
+                    while (e_num) {
+                        card = get.cardPile2(function (card) {
+                            return get.type2(card) == 'equip';
+                        });
+                        if (card) {
+                            e_num--;
+                            ui.special.appendChild(card);
+                            cards.push(card);
+                        } else {
+                            while (e_num) {
+                                card = get.discardPile(function (card) {
+                                    return get.type2(card) == 'equip';
+                                });
+                                if (!card) {
+                                    e_num = 0;
+                                    break;
+                                }
+                                e_num--;
+                                ui.special.appendChild(card);
+                                cards.push(card);
+                            }
+                        }
+                    }
+                    while (t_num) {
+                        card = get.cardPile2(function (card) {
+                            return get.type2(card) == 'trick';
+                        });
+                        if (card) {
+                            t_num--;
+                            ui.special.appendChild(card);
+                            cards.push(card);
+                        } else {
+                            while (t_num) {
+                                card = get.discardPile(function (card) {
+                                    return get.type2(card) == 'trick';
+                                });
+                                if (!card) {
+                                    t_num = 0;
+                                    break;
+                                }
+                                t_num--;
+                                ui.special.appendChild(card);
+                                cards.push(card);
+                            }
+                        }
+                    }
+                    player.directgain(cards);
+                    if (player.maxHp >= 9) {
+                        player.loseMaxHp(7);
+                    } else {
+                        player.loseHp(player.maxHp - 2);
+                    }
+                },
+
+            },
             //大胃：你使用【桃】、【酒】时，效果结算两次。
-            xdawei: {},
+            xdawei: {
+                audio: "rechunlao",
+                trigger: { player: "useCard", },
+                frequent: true,
+                filter: function (event, player) {
+                    return event.card.name == 'tao' || event.card.name == 'jiu';
+                },
+                content: function () {
+                    trigger.effectCount++;
+                },
+            },
             
 
 
@@ -932,11 +1180,11 @@ package: {
         },
         translate: {
             xfeiqiu: "非酋",
-            "xfeiqiu_info": "锁定技,每名玩家出牌阶段开始时,你进行判定：若点数不为“648”,则你失去一点体力,获得一枚“非”标记。",
+            "xfeiqiu_info": "锁定技,每名玩家出牌阶段开始时,若你体力大于1则你进行判定：若点数不为“648”,则你失去一点体力,获得一枚“非”标记。",
             xgandi: "肝帝",
             "xgandi_info": "出牌阶段限一次,你可以主动触发【非酋】的效果并摸一张牌。此回合你每造成一点伤害或每使用三张牌,此技可发动次数+1。",
             xshilian: "十连",
-            "xshilian_info": "出牌阶段限一次，你可以移除4枚“非”进行判定从牌堆和弃牌区获得对应数量的基本/装备/锦囊牌。♥2~9,视为【欧】,否则视为【歪】;若点数与体力值相同,视为【皇】。（①欧,1/2/3,失去4点体力上限；②歪,1/1/1,获得【保】;③皇,5/5/5,失去7点体力上限；④【保】,增加2点体力上限并回复两点体力,下次十连视为【欧】）体力上限至少为2。",
+            "xshilian_info": "出牌阶段限一次，你可以移除5枚“非”进行判定从牌堆或弃牌区获得对应数量的基本/装备/锦囊牌。♥2~9,视为【欧】,否则视为【歪】;若点数与体力值相同,视为【皇】。（①歪,1/1/1,获得【保】;②欧,1/2/3,失去5点体力上限;③皇,3/4/5,失去7点体力上限;④【保】,增加2点体力上限并回复两点体力,下次十连视为【欧】）你的体力上限至少为2。",
             xdawei: "大胃",
             "xdawei_info": "你使用【桃】、【酒】时，效果结算两次。",
             xbugua: "卜卦",
@@ -988,8 +1236,7 @@ package: {
     version: "1.0",
 },
     files: {
-        "character": ["xniuyeye.jpg", "xzhangjiao.jpg", "xmachao.jpg", "xzhipeilvzhe.jpg", 'xxiao.jpg', 'xguaxian.jpg'
-        'xysqh.jpg'],
+        "character": [],
         "card": ["htchui.jpg"],
         "skill": []
     },
